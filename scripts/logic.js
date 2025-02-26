@@ -174,6 +174,141 @@ function checkForWin(boardIndex) {
   return 0;
 }
 
+function checkForWinKnowingMover(boardIndex, whoMoved) {
+  // Only check necessary row, column, and diagonals duhhhhh
+
+  const value = whoMoved;
+  // horizontal
+  // start looking left, then right when the value is wrong
+  count = 1;
+  nextIndex = boardIndex;
+  while (true) {
+    nextIndex--;
+    if (nextIndex % boardWidth === boardWidth - 1) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (value === nextVal) {
+      count++;
+      if (count === goal) {
+        return value;
+      }
+    } else {
+      break;
+    }
+  }
+  nextIndex = boardIndex;
+  while (true) {
+    // right
+    nextIndex++;
+    if (nextIndex % boardWidth === 0) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (value === nextVal) {
+      count++;
+      if (count === goal) {
+        console.log("win spotted");
+
+        return value;
+      }
+    } else {
+      break;
+    }
+  }
+
+  // vertical, only have to look down since it stacks, lets go
+  count = 1;
+  nextIndex = boardIndex;
+  while (true) {
+    nextIndex += boardWidth;
+    if (nextIndex >= boardLength) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (value === nextVal) {
+      count++;
+      if (count === goal) {
+        return value;
+      }
+    } else {
+      break;
+    }
+  }
+
+  // diagonals
+  // down left - up right
+  count = 1;
+  nextIndex = boardIndex;
+  while (true) {
+    nextIndex -= boardWidth - 1;
+    if (nextIndex < 0 || nextIndex % boardWidth === 0) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (value === nextVal) {
+      count++;
+      if (count === goal) {
+        return value;
+      }
+    } else {
+      break;
+    }
+  }
+  nextIndex = boardIndex;
+  while (true) {
+    nextIndex += boardWidth - 1;
+    if (nextIndex < 0 || (nextIndex + 1) % boardWidth === 0) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (value === nextVal) {
+      count++;
+      if (count === goal) {
+        return value;
+      }
+    } else {
+      break;
+    }
+  }
+  // down right - up left
+  count = 1;
+  nextIndex = boardIndex;
+  while (true) {
+    nextIndex -= boardWidth + 1;
+    if (nextIndex < 0 || (nextIndex + 1) % boardWidth === 0) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (value === nextVal) {
+      count++;
+      if (count === goal) {
+        return value;
+      }
+    } else {
+      break;
+    }
+  }
+
+  nextIndex = boardIndex;
+  while (true) {
+    nextIndex += boardWidth + 1;
+    if (nextIndex < 0 || nextIndex % boardWidth === 0) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (value === nextVal) {
+      count++;
+      if (count === goal) {
+        return value;
+      }
+    } else {
+      break;
+    }
+  }
+  return 0;
+}
+
 // piece of shit stupid whole board search below
 
 function slowCheckForWin() {

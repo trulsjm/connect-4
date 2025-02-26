@@ -1,21 +1,19 @@
-const maxDepth = 7; // should be odd to make the last move considered the players?
+const maxDepth = 11; // should be odd to make the last move considered the players?
 // Hopefully make this one flexible
 
-let transpositionTable = {};
-const zobristTable = Array.from({ length: 42 }, () => [
+let transpositionTable = new Map();
+const zobristTable = Array.from({ length: boardLength }, () => [
   BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)), // Player 1
   BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)), // Player 2
 ]);
-hashKey = computeZobristHash(board); // update and un-update for each move searched
 
 let transpositionsSkipped = 0;
 
 function botMove() {
   console.log("bot moving");
 
-  transpositionTable = {};
-  hashKey = computeZobristHash(board);
-
+  transpositionTable = new Map();
+  const hashKey = computeZobristHash(board);
   const startDate = new Date();
   const startTime = startDate.getTime();
 
@@ -24,9 +22,16 @@ function botMove() {
   for (let i = 0; i < boardWidth; i++) {
     if (board[i] === 0) {
       const boardIndex = move(i, bot);
-      hashKey = updateZobristHash(hashKey, boardIndex, 0, bot); // update hash
+      const newHashKey = updateZobristHash(hashKey, boardIndex, 0, bot); // update hash
 
-      const val = miniMax(player, 0, boardIndex, -Infinity, Infinity);
+      const val = miniMax(
+        player,
+        0,
+        boardIndex,
+        -Infinity,
+        Infinity,
+        newHashKey
+      );
       console.log(`${val} for index ${i}`);
 
       board[boardIndex] = 0;
@@ -34,15 +39,13 @@ function botMove() {
         evaluation = val;
         chosenIndex = i;
       }
-
-      hashKey = updateZobristHash(hashKey, boardIndex, bot, 0); // un-update hash
     }
   }
   const endDate = new Date();
   const endTime = endDate.getTime();
   const timeInterval = (endTime - startTime) / 1000;
   console.log(`moved with depth ${maxDepth} in ${timeInterval} seconds`);
-  console.log("hashkey at end: ", hashKey);
+  console.log(transpositionTable.size);
 
   if (evaluation === -Infinity) {
     for (let i = 0; i < boardWidth; i++) {
@@ -56,14 +59,13 @@ function botMove() {
   makeMove(chosenIndex);
 }
 
-function miniMax(currentTurn, depth, recentMove, alpha, beta) {
-  const boardKey = board.join(","); // Simple hash: stringify the board state
-  if (transpositionTable.hasOwnProperty(boardKey)) {
-    return transpositionTable[boardKey];
+function miniMax(currentTurn, depth, recentMove, alpha, beta, hashKey) {
+  if (transpositionTable.hasOwnProperty(hashKey)) {
+    return transpositionTable[hashKey];
   }
   // Base case , Odd depth should mean the player made the last move
   if (depth === maxDepth) {
-    return evaluate(recentMove);
+    return evaluate(recentMove, currentTurn ^ 3);
   }
 
   // terminal check: check for win, no need to go further in that case
@@ -80,10 +82,11 @@ function miniMax(currentTurn, depth, recentMove, alpha, beta) {
     for (let i = 0; i < boardWidth; i++) {
       if (board[i] === 0) {
         const boardIndex = move(i, bot); // make move and get the index for quick undo
+        const newHashKey = updateZobristHash(hashKey, boardIndex, 0, bot);
         const nextTurn = currentTurn ^ 3; // flip turn before going deeper, XOR with 3 ( binary 11) 01 -> 10 -> 01
         evaluation = Math.max(
           evaluation,
-          miniMax(nextTurn, depth + 1, boardIndex, alpha, beta)
+          miniMax(nextTurn, depth + 1, boardIndex, alpha, beta, newHashKey)
         );
         board[boardIndex] = 0; // Undo move
         if (evaluation > beta) {
@@ -92,7 +95,8 @@ function miniMax(currentTurn, depth, recentMove, alpha, beta) {
         alpha = Math.max(alpha, evaluation);
       }
     }
-    transpositionTable[boardKey] = evaluation;
+    // evaluation += evaluate(recentMove, currentTurn ^ 3); // maybe do this always (which is putting it here)
+    transpositionTable[hashKey] = evaluation;
     return evaluation;
   } else {
     // Player wants negative values
@@ -100,10 +104,12 @@ function miniMax(currentTurn, depth, recentMove, alpha, beta) {
     for (let i = 0; i < boardWidth; i++) {
       if (board[i] === 0) {
         const boardIndex = move(i, player);
+        const newHashKey = updateZobristHash(hashKey, boardIndex, 0, player);
+
         const nextTurn = currentTurn ^ 3; // XOR with 3 ( binary 11) 01 -> 10 -> 01
         evaluation = Math.min(
           evaluation,
-          miniMax(nextTurn, depth + 1, boardIndex, alpha, beta)
+          miniMax(nextTurn, depth + 1, boardIndex, alpha, beta, newHashKey)
         );
         board[boardIndex] = 0;
         if (evaluation < alpha) {
@@ -112,18 +118,31 @@ function miniMax(currentTurn, depth, recentMove, alpha, beta) {
         beta = Math.min(beta, evaluation);
       }
     }
+    // evaluation += evaluate(recentMove, currentTurn ^ 3); // maybe do this always (which is putting it here)
+    transpositionTable[hashKey] = evaluation;
     return evaluation;
   }
 }
 
-function evaluate(recentMove) {
+function evaluate(recentMove, whoMoved) {
   const win = checkForWin(recentMove);
   if (win === bot) {
     return Infinity;
   } else if (win === player) {
     return -Infinity;
   }
-  return 0; // nice
+  let score = Math.random();
+  // let score = 0;
+  // score +=
+  //   whoMoved === bot
+  //     ? checkForNInARow(recentMove, 3, whoMoved) +
+  //       checkBlockNInARow(recentMove, 3, whoMoved)
+  //     : -(
+  //         checkForNInARow(recentMove, 3, whoMoved) +
+  //         checkBlockNInARow(recentMove, 3, whoMoved)
+  //       );
+
+  return score; // nice
 }
 
 function move(index, turn) {
@@ -135,6 +154,81 @@ function move(index, turn) {
     }
   }
   console.error("an impossible move was attempted");
+}
+
+function checkForNInARow(boardIndex, n, whoMoved) {
+  const value = board[boardIndex];
+  let score = 0;
+  // horizontal
+  // start looking left, then right when the value is wrong
+  count = 1;
+  nextIndex = boardIndex;
+  while (true) {
+    nextIndex--;
+    if (nextIndex % boardWidth === boardWidth - 1) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (nextVal === value) {
+      count++;
+    } else {
+      if (count != n) {
+        break;
+      }
+      // check if the next space is free, and the one under for a setup
+      // Then check if the row matches what the player is most interested in
+      if (nextVal === 0) {
+        score += 5;
+        if (
+          nextIndex < boardLength - boardWidth &&
+          board[nextIndex + boardWidth] === 0
+        ) {
+          score += 50;
+        }
+      }
+      break;
+    }
+  }
+  nextIndex = boardIndex;
+  while (true) {
+    // right
+    nextIndex++;
+    if (nextIndex % boardWidth === 0) {
+      break;
+    }
+    nextVal = board[nextIndex];
+    if (nextVal === value) {
+      count++;
+    } else {
+      if (count != n) {
+        break;
+      }
+      if (nextVal === 0) {
+        score += 5;
+        if (
+          nextIndex < boardLength - boardWidth &&
+          board[nextIndex + boardWidth] === 0
+        ) {
+          score += 50;
+        }
+      }
+      break;
+    }
+  }
+  if (Math.floor(boardIndex / boardWidth) % 2 === whoMoved % 2) {
+    // even is good for player 2
+    score *= 2;
+  }
+  return score;
+}
+
+function checkBlockNInARow(boardIndex, n, whoMoved) {
+  const playerGettingBlocked = whoMoved ^ 3;
+  actualBlockedPlayer = checkForWinKnowingMover(boardIndex, whoMoved);
+  if (actualBlockedPlayer === playerGettingBlocked) {
+    return 300;
+  }
+  return 0;
 }
 
 function getMoves() {
